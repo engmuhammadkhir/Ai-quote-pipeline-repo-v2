@@ -44,5 +44,4 @@ Gmail -> mask data -> dedupe -> Langflow extraction -> validate + price -> PDF -
 ## Scope
 Demo project showing the pattern. It is adapted to each client's mailbox, price list and CRM.
 
-## Copyright
-Copyright (c) 2026 Muhammad Khir. All rights reserved. This repository is a portfolio sample; no license is granted for reuse.
+##Copyright (c) 2026 Muhammad Khir. All rights reserved. This repository is a portfolio sample; no license is granted for reuse.

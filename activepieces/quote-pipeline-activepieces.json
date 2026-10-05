@@ -1,0 +1,717 @@
+{
+  "name": "Quote Pipeline (DRAFT )",
+  "type": "SHARED",
+  "summary": "Email quote request to Langflow extraction to PDF draft, CRM, Slack. Not published.",
+  "description": "Notes: do not publish before tests. CRM and Slack steps are disabled by default.",
+  "tags": [],
+  "blogUrl": "",
+  "metadata": {
+    "externalId": "quote-pipeline-0001"
+  },
+  "author": "",
+  "categories": [],
+  "pieces": [
+    "@activepieces/piece-gmail",
+    "@activepieces/piece-store",
+    "@activepieces/piece-http",
+    "@activepieces/piece-pdf",
+    "@activepieces/piece-slack",
+    "@activepieces/piece-google-sheets"
+  ],
+  "flows": [
+    {
+      "displayName": "Quote Pipeline (DRAFT)",
+      "trigger": {
+        "name": "trigger",
+        "valid": true,
+        "displayName": "New Email",
+        "nextAction": {
+          "name": "step_1",
+          "skip": false,
+          "type": "CODE",
+          "valid": true,
+          "settings": {
+            "input": {
+              "text": "{{trigger['output']['message']['text']}}",
+              "subject": "{{trigger['output']['message']['subject']}}",
+              "messageId": "{{trigger['output']['message']['id']}}"
+            },
+            "sourceCode": {
+              "code": "export const code = async (inputs) => {\n  const MAX = 6000;\n  const redact = (s) => s.replace(/[\\w.+-]+@[\\w-]+\\.[\\w.-]+/g, \"[EMAIL]\").replace(/\\+?\\d[\\d\\s().-]{7,}\\d/g, \"[PHONE]\");\n  const raw = String(inputs.text || \"\");\n  const clean = redact(raw).slice(0, MAX);\n  const ok = !!inputs.messageId && clean.trim().length > 15;\n  const key = \"quote:\" + String(inputs.messageId || \"none\");\n  return { ok, reason: ok ? \"\" : \"empty_or_invalid_email\", key,\n           email_json: JSON.stringify({ subject: String(inputs.subject || \"\").slice(0, 200), body: clean }) };\n};",
+              "packageJson": "{}"
+            },
+            "sampleData": {},
+            "sampleDataSettings": {},
+            "errorHandlingOptions": {
+              "retryOnFailure": {
+                "value": false
+              },
+              "continueOnFailure": {
+                "value": false
+              }
+            }
+          },
+          "displayName": "Validate and Redact Input",
+          "lastUpdatedDate": "2026-10-05T07:00:00.000Z",
+          "nextAction": {
+            "name": "step_2",
+            "skip": false,
+            "type": "PIECE",
+            "valid": true,
+            "settings": {
+              "input": {
+                "key": "{{step_1['output']['key']}}",
+                "store_scope": "PROJECT"
+              },
+              "pieceName": "@activepieces/piece-store",
+              "pieceType": "OFFICIAL",
+              "actionName": "get",
+              "sampleData": {},
+              "packageType": "REGISTRY",
+              "pieceVersion": "0.4.0",
+              "propertySettings": {
+                "key": {
+                  "type": "MANUAL"
+                },
+                "store_scope": {
+                  "type": "MANUAL"
+                }
+              },
+              "sampleDataSettings": {},
+              "errorHandlingOptions": {
+                "retryOnFailure": {
+                  "value": false
+                },
+                "continueOnFailure": {
+                  "value": false
+                }
+              }
+            },
+            "displayName": "Dedupe Check (UNVERIFIED piece)",
+            "lastUpdatedDate": "2026-10-05T07:00:00.000Z",
+            "nextAction": {
+              "name": "step_3",
+              "skip": false,
+              "type": "ROUTER",
+              "valid": true,
+              "children": [
+                {
+                  "name": "step_4",
+                  "skip": false,
+                  "type": "PIECE",
+                  "valid": true,
+                  "settings": {
+                    "input": {
+                      "key": "{{step_1['output']['key']}}",
+                      "value": "processing",
+                      "store_scope": "PROJECT"
+                    },
+                    "pieceName": "@activepieces/piece-store",
+                    "pieceType": "OFFICIAL",
+                    "actionName": "put",
+                    "sampleData": {},
+                    "packageType": "REGISTRY",
+                    "pieceVersion": "0.4.0",
+                    "propertySettings": {
+                      "key": {
+                        "type": "MANUAL"
+                      },
+                      "value": {
+                        "type": "MANUAL"
+                      },
+                      "store_scope": {
+                        "type": "MANUAL"
+                      }
+                    },
+                    "sampleDataSettings": {},
+                    "errorHandlingOptions": {
+                      "retryOnFailure": {
+                        "value": false
+                      },
+                      "continueOnFailure": {
+                        "value": false
+                      }
+                    }
+                  },
+                  "displayName": "Mark Processing (UNVERIFIED piece)",
+                  "lastUpdatedDate": "2026-10-05T07:00:00.000Z",
+                  "nextAction": {
+                    "name": "step_5",
+                    "skip": false,
+                    "type": "PIECE",
+                    "valid": true,
+                    "settings": {
+                      "input": {
+                        "method": "POST",
+                        "url": "https://REPLACE_WITH_FIXED_HTTPS_HOST/api/v1/run/REPLACE_LANGFLOW_FLOW_ID",
+                        "headers": {
+                          "Content-Type": "application/json",
+                          "x-api-key": "REPLACE_WITH_LANGFLOW_API_KEY_MANUAL"
+                        },
+                        "body_type": "json",
+                        "body": {
+                          "input_value": "{{step_1['output']['email_json']}}",
+                          "session_id": "{{step_1['output']['key']}}",
+                          "input_type": "chat",
+                          "output_type": "chat"
+                        },
+                        "timeout": 60,
+                        "failureMode": "continue_none"
+                      },
+                      "pieceName": "@activepieces/piece-http",
+                      "pieceType": "OFFICIAL",
+                      "actionName": "send_request",
+                      "sampleData": {},
+                      "packageType": "REGISTRY",
+                      "pieceVersion": "0.9.0",
+                      "propertySettings": {
+                        "method": {
+                          "type": "MANUAL"
+                        },
+                        "url": {
+                          "type": "MANUAL"
+                        },
+                        "headers": {
+                          "type": "MANUAL"
+                        },
+                        "body_type": {
+                          "type": "MANUAL"
+                        },
+                        "body": {
+                          "type": "MANUAL"
+                        },
+                        "timeout": {
+                          "type": "MANUAL"
+                        },
+                        "failureMode": {
+                          "type": "MANUAL"
+                        }
+                      },
+                      "sampleDataSettings": {},
+                      "errorHandlingOptions": {
+                        "retryOnFailure": {
+                          "value": false
+                        },
+                        "continueOnFailure": {
+                          "value": false
+                        }
+                      }
+                    },
+                    "displayName": "Call Langflow (MANUAL/UNVERIFIED fields)",
+                    "lastUpdatedDate": "2026-10-05T07:00:00.000Z",
+                    "nextAction": {
+                      "name": "step_6",
+                      "skip": false,
+                      "type": "CODE",
+                      "valid": true,
+                      "settings": {
+                        "input": {
+                          "langflowResponse": "{{step_5['output']['body']}}",
+                          "priceListJson": "{\"example item\":{\"unit_price\":100}}",
+                          "vatRate": "0.15",
+                          "ref": "Q-{{step_1['output']['key']}}"
+                        },
+                        "sourceCode": {
+                          "code": "export const code = async (inputs) => {\n  const fail = (e) => ({ ok: false, error: e, quote_text: \"\", quote_json: \"\" });\n  const find = (v) => {\n    if (typeof v === \"string\") { try { const j = JSON.parse(v); const r = find(j); if (r) return r; } catch (e) {} return null; }\n    if (Array.isArray(v)) { for (const x of v) { const r = find(x); if (r) return r; } return null; }\n    if (v && typeof v === \"object\") { if (\"is_quote_request\" in v && \"items\" in v) return v;\n      for (const k of Object.keys(v)) { const r = find(v[k]); if (r) return r; } }\n    return null;\n  };\n  const q = find(inputs.langflowResponse);\n  if (!q) return fail(\"no_valid_json\");\n  if (q.is_quote_request !== true || !Array.isArray(q.items) || q.items.length === 0 || q.items.length > 30) return fail(\"not_a_quote_request\");\n  let prices; try { prices = JSON.parse(inputs.priceListJson); } catch (e) { return fail(\"bad_price_list\"); }\n  const vat = Number(inputs.vatRate);\n  if (!(vat >= 0 && vat < 1)) return fail(\"bad_vat\");\n  let sub = 0; const lines = [];\n  for (const it of q.items) {\n    const qty = Number(it.quantity); const p = prices[String(it.description).trim().toLowerCase()];\n    if (!(qty > 0 && qty <= 100000) || !p || !(p.unit_price > 0)) return fail(\"unpriced_item:\" + String(it.description).slice(0, 40));\n    const t = Math.round(qty * p.unit_price * 100) / 100; sub += t;\n    lines.push(String(it.description) + \" | \" + qty + \" x \" + p.unit_price + \" = \" + t.toFixed(2));\n  }\n  const vatAmt = Math.round(sub * vat * 100) / 100; const total = Math.round((sub + vatAmt) * 100) / 100;\n  const text = \"QUOTATION\\nRef: \" + inputs.ref + \"\\nCustomer: \" + (q.customer && q.customer.name || \"\") + \"\\n\\n\" + lines.join(\"\\n\") +\n    \"\\n\\nSubtotal: \" + sub.toFixed(2) + \"\\nVAT: \" + vatAmt.toFixed(2) + \"\\nTotal: \" + total.toFixed(2) + \"\\nValid for 14 days.\";\n  return { ok: true, error: \"\", quote_text: text, total: total, quote_json: JSON.stringify({ ref: inputs.ref, items: q.items, subtotal: sub, vat: vatAmt, total }) };\n};",
+                          "packageJson": "{}"
+                        },
+                        "sampleData": {},
+                        "sampleDataSettings": {},
+                        "errorHandlingOptions": {
+                          "retryOnFailure": {
+                            "value": false
+                          },
+                          "continueOnFailure": {
+                            "value": false
+                          }
+                        }
+                      },
+                      "displayName": "Parse, Validate, Price Quote",
+                      "lastUpdatedDate": "2026-10-05T07:00:00.000Z",
+                      "nextAction": {
+                        "name": "step_7",
+                        "skip": false,
+                        "type": "ROUTER",
+                        "valid": true,
+                        "children": [
+                          {
+                            "name": "step_8",
+                            "skip": false,
+                            "type": "PIECE",
+                            "valid": true,
+                            "settings": {
+                              "input": {
+                                "text": "{{step_6['output']['quote_text']}}"
+                              },
+                              "pieceName": "@activepieces/piece-pdf",
+                              "pieceType": "OFFICIAL",
+                              "actionName": "textToPdf",
+                              "sampleData": {},
+                              "packageType": "REGISTRY",
+                              "pieceVersion": "0.1.0",
+                              "propertySettings": {
+                                "text": {
+                                  "type": "MANUAL"
+                                }
+                              },
+                              "sampleDataSettings": {},
+                              "errorHandlingOptions": {
+                                "retryOnFailure": {
+                                  "value": false
+                                },
+                                "continueOnFailure": {
+                                  "value": false
+                                }
+                              }
+                            },
+                            "displayName": "Quote to PDF (UNVERIFIED piece)",
+                            "lastUpdatedDate": "2026-10-05T07:00:00.000Z",
+                            "nextAction": {
+                              "name": "step_9",
+                              "skip": false,
+                              "type": "PIECE",
+                              "valid": true,
+                              "settings": {
+                                "input": {
+                                  "cc": [],
+                                  "bcc": [],
+                                  "auth": "{{connections['MANUAL_GMAIL']}}",
+                                  "body": "Draft quote for review. Attach PDF manually (MANUAL).\n\n{{step_6['output']['quote_text']}}",
+                                  "draft": true,
+                                  "subject": "Quotation: {{trigger['output']['message']['subject']}}",
+                                  "receiver": [
+                                    "{{trigger['output']['message']['from']['value'][0]['address']}}"
+                                  ],
+                                  "reply_to": [],
+                                  "body_type": "plain_text"
+                                },
+                                "pieceName": "@activepieces/piece-gmail",
+                                "pieceType": "OFFICIAL",
+                                "actionName": "send_email",
+                                "sampleData": {},
+                                "packageType": "REGISTRY",
+                                "pieceVersion": "0.8.6",
+                                "propertySettings": {
+                                  "cc": {
+                                    "type": "MANUAL"
+                                  },
+                                  "bcc": {
+                                    "type": "MANUAL"
+                                  },
+                                  "auth": {
+                                    "type": "MANUAL"
+                                  },
+                                  "body": {
+                                    "type": "MANUAL"
+                                  },
+                                  "draft": {
+                                    "type": "MANUAL"
+                                  },
+                                  "subject": {
+                                    "type": "MANUAL"
+                                  },
+                                  "receiver": {
+                                    "type": "MANUAL"
+                                  },
+                                  "reply_to": {
+                                    "type": "MANUAL"
+                                  },
+                                  "body_type": {
+                                    "type": "MANUAL"
+                                  }
+                                },
+                                "sampleDataSettings": {},
+                                "errorHandlingOptions": {
+                                  "retryOnFailure": {
+                                    "value": false
+                                  },
+                                  "continueOnFailure": {
+                                    "value": false
+                                  }
+                                }
+                              },
+                              "displayName": "Create Gmail DRAFT (human approval)",
+                              "lastUpdatedDate": "2026-10-05T07:00:00.000Z",
+                              "nextAction": {
+                                "name": "step_10",
+                                "skip": true,
+                                "type": "PIECE",
+                                "valid": true,
+                                "settings": {
+                                  "input": {
+                                    "method": "POST",
+                                    "url": "https://REPLACE_WITH_FIXED_HTTPS_HOST/REPLACE_CRM_PATH",
+                                    "headers": {
+                                      "Content-Type": "application/json",
+                                      "Authorization": "REPLACE_WITH_CRM_TOKEN_MANUAL"
+                                    },
+                                    "body_type": "json",
+                                    "body": {
+                                      "quote": "{{step_6['output']['quote_json']}}"
+                                    },
+                                    "timeout": 30
+                                  },
+                                  "pieceName": "@activepieces/piece-http",
+                                  "pieceType": "OFFICIAL",
+                                  "actionName": "send_request",
+                                  "sampleData": {},
+                                  "packageType": "REGISTRY",
+                                  "pieceVersion": "0.9.0",
+                                  "propertySettings": {
+                                    "method": {
+                                      "type": "MANUAL"
+                                    },
+                                    "url": {
+                                      "type": "MANUAL"
+                                    },
+                                    "headers": {
+                                      "type": "MANUAL"
+                                    },
+                                    "body_type": {
+                                      "type": "MANUAL"
+                                    },
+                                    "body": {
+                                      "type": "MANUAL"
+                                    },
+                                    "timeout": {
+                                      "type": "MANUAL"
+                                    }
+                                  },
+                                  "sampleDataSettings": {},
+                                  "errorHandlingOptions": {
+                                    "retryOnFailure": {
+                                      "value": false
+                                    },
+                                    "continueOnFailure": {
+                                      "value": false
+                                    }
+                                  }
+                                },
+                                "displayName": "CRM Write (DISABLED by default)",
+                                "lastUpdatedDate": "2026-10-05T07:00:00.000Z",
+                                "nextAction": {
+                                  "name": "step_11",
+                                  "skip": true,
+                                  "type": "PIECE",
+                                  "valid": true,
+                                  "settings": {
+                                    "input": {
+                                      "channel": "MANUAL_SELECT_CHANNEL",
+                                      "text": "New quote draft ready: {{step_6['output']['quote_json']}}"
+                                    },
+                                    "pieceName": "@activepieces/piece-slack",
+                                    "pieceType": "OFFICIAL",
+                                    "actionName": "send_channel_message",
+                                    "sampleData": {},
+                                    "packageType": "REGISTRY",
+                                    "pieceVersion": "0.0.0",
+                                    "propertySettings": {
+                                      "channel": {
+                                        "type": "MANUAL"
+                                      },
+                                      "text": {
+                                        "type": "MANUAL"
+                                      }
+                                    },
+                                    "sampleDataSettings": {},
+                                    "errorHandlingOptions": {
+                                      "retryOnFailure": {
+                                        "value": false
+                                      },
+                                      "continueOnFailure": {
+                                        "value": false
+                                      }
+                                    }
+                                  },
+                                  "displayName": "Slack Notify (DISABLED, UNVERIFIED)",
+                                  "lastUpdatedDate": "2026-10-05T07:00:00.000Z",
+                                  "nextAction": {
+                                    "name": "step_12",
+                                    "skip": false,
+                                    "type": "PIECE",
+                                    "valid": true,
+                                    "settings": {
+                                      "input": {
+                                        "auth": "{{connections['MANUAL_GOOGLE_SHEETS']}}",
+                                        "values": {
+                                          "A": "{{trigger['output']['message']['subject']}}",
+                                          "B": "{{step_1['output']['key']}}",
+                                          "C": "QUOTE_DRAFT_CREATED",
+                                          "D": "{{step_6['output']['total']}}"
+                                        },
+                                        "sheet_id": 0,
+                                        "as_string": false,
+                                        "spreadsheet_id": "MANUAL_SELECT_SPREADSHEET",
+                                        "first_row_headers": true,
+                                        "include_team_drives": false
+                                      },
+                                      "pieceName": "@activepieces/piece-google-sheets",
+                                      "pieceType": "OFFICIAL",
+                                      "actionName": "insert_row",
+                                      "sampleData": {},
+                                      "packageType": "REGISTRY",
+                                      "pieceVersion": "0.11.14",
+                                      "propertySettings": {
+                                        "auth": {
+                                          "type": "MANUAL"
+                                        },
+                                        "values": {
+                                          "type": "MANUAL"
+                                        },
+                                        "sheet_id": {
+                                          "type": "MANUAL"
+                                        },
+                                        "as_string": {
+                                          "type": "MANUAL"
+                                        },
+                                        "spreadsheet_id": {
+                                          "type": "MANUAL"
+                                        },
+                                        "first_row_headers": {
+                                          "type": "MANUAL"
+                                        },
+                                        "include_team_drives": {
+                                          "type": "MANUAL"
+                                        }
+                                      },
+                                      "sampleDataSettings": {},
+                                      "errorHandlingOptions": {
+                                        "retryOnFailure": {
+                                          "value": false
+                                        },
+                                        "continueOnFailure": {
+                                          "value": false
+                                        }
+                                      }
+                                    },
+                                    "displayName": "Audit/Dead-letter Row",
+                                    "lastUpdatedDate": "2026-10-05T07:00:00.000Z"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "name": "step_13",
+                            "skip": false,
+                            "type": "PIECE",
+                            "valid": true,
+                            "settings": {
+                              "input": {
+                                "auth": "{{connections['MANUAL_GOOGLE_SHEETS']}}",
+                                "values": {
+                                  "A": "{{trigger['output']['message']['subject']}}",
+                                  "B": "{{step_1['output']['key']}}",
+                                  "C": "DEAD_LETTER_REVIEW",
+                                  "D": "{{step_6['output']['error']}}"
+                                },
+                                "sheet_id": 0,
+                                "as_string": false,
+                                "spreadsheet_id": "MANUAL_SELECT_SPREADSHEET",
+                                "first_row_headers": true,
+                                "include_team_drives": false
+                              },
+                              "pieceName": "@activepieces/piece-google-sheets",
+                              "pieceType": "OFFICIAL",
+                              "actionName": "insert_row",
+                              "sampleData": {},
+                              "packageType": "REGISTRY",
+                              "pieceVersion": "0.11.14",
+                              "propertySettings": {
+                                "auth": {
+                                  "type": "MANUAL"
+                                },
+                                "values": {
+                                  "type": "MANUAL"
+                                },
+                                "sheet_id": {
+                                  "type": "MANUAL"
+                                },
+                                "as_string": {
+                                  "type": "MANUAL"
+                                },
+                                "spreadsheet_id": {
+                                  "type": "MANUAL"
+                                },
+                                "first_row_headers": {
+                                  "type": "MANUAL"
+                                },
+                                "include_team_drives": {
+                                  "type": "MANUAL"
+                                }
+                              },
+                              "sampleDataSettings": {},
+                              "errorHandlingOptions": {
+                                "retryOnFailure": {
+                                  "value": false
+                                },
+                                "continueOnFailure": {
+                                  "value": false
+                                }
+                              }
+                            },
+                            "displayName": "Audit/Dead-letter Row",
+                            "lastUpdatedDate": "2026-10-05T07:00:00.000Z"
+                          }
+                        ],
+                        "settings": {
+                          "branches": [
+                            {
+                              "branchName": "Quote OK",
+                              "branchType": "CONDITION",
+                              "conditions": [
+                                [
+                                  {
+                                    "operator": "TEXT_CONTAINS",
+                                    "firstValue": "{{step_6['output']['ok']}}",
+                                    "secondValue": "true",
+                                    "caseSensitive": false
+                                  }
+                                ]
+                              ]
+                            },
+                            {
+                              "branchName": "Otherwise",
+                              "branchType": "FALLBACK"
+                            }
+                          ],
+                          "sampleData": {},
+                          "executionType": "EXECUTE_FIRST_MATCH",
+                          "propertySettings": {},
+                          "sampleDataSettings": {}
+                        },
+                        "displayName": "Gate: Quote Valid",
+                        "lastUpdatedDate": "2026-10-05T07:00:00.000Z"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "step_14",
+                  "skip": false,
+                  "type": "PIECE",
+                  "valid": true,
+                  "settings": {
+                    "input": {
+                      "auth": "{{connections['MANUAL_GOOGLE_SHEETS']}}",
+                      "values": {
+                        "A": "{{trigger['output']['message']['subject']}}",
+                        "B": "{{step_1['output']['key']}}",
+                        "C": "INVALID_OR_DUPLICATE",
+                        "D": "{{step_1['output']['reason']}}"
+                      },
+                      "sheet_id": 0,
+                      "as_string": false,
+                      "spreadsheet_id": "MANUAL_SELECT_SPREADSHEET",
+                      "first_row_headers": true,
+                      "include_team_drives": false
+                    },
+                    "pieceName": "@activepieces/piece-google-sheets",
+                    "pieceType": "OFFICIAL",
+                    "actionName": "insert_row",
+                    "sampleData": {},
+                    "packageType": "REGISTRY",
+                    "pieceVersion": "0.11.14",
+                    "propertySettings": {
+                      "auth": {
+                        "type": "MANUAL"
+                      },
+                      "values": {
+                        "type": "MANUAL"
+                      },
+                      "sheet_id": {
+                        "type": "MANUAL"
+                      },
+                      "as_string": {
+                        "type": "MANUAL"
+                      },
+                      "spreadsheet_id": {
+                        "type": "MANUAL"
+                      },
+                      "first_row_headers": {
+                        "type": "MANUAL"
+                      },
+                      "include_team_drives": {
+                        "type": "MANUAL"
+                      }
+                    },
+                    "sampleDataSettings": {},
+                    "errorHandlingOptions": {
+                      "retryOnFailure": {
+                        "value": false
+                      },
+                      "continueOnFailure": {
+                        "value": false
+                      }
+                    }
+                  },
+                  "displayName": "Audit/Dead-letter Row",
+                  "lastUpdatedDate": "2026-10-05T07:00:00.000Z"
+                }
+              ],
+              "settings": {
+                "branches": [
+                  {
+                    "branchName": "Valid and New",
+                    "branchType": "CONDITION",
+                    "conditions": [
+                      [
+                        {
+                          "operator": "TEXT_CONTAINS",
+                          "firstValue": "{{step_1['output']['ok']}}",
+                          "secondValue": "true",
+                          "caseSensitive": false
+                        },
+                        {
+                          "operator": "DOES_NOT_EXIST",
+                          "firstValue": "{{step_2['output']}}"
+                        }
+                      ]
+                    ]
+                  },
+                  {
+                    "branchName": "Otherwise",
+                    "branchType": "FALLBACK"
+                  }
+                ],
+                "sampleData": {},
+                "executionType": "EXECUTE_FIRST_MATCH",
+                "propertySettings": {},
+                "sampleDataSettings": {}
+              },
+              "displayName": "Gate: Valid and Not Duplicate",
+              "lastUpdatedDate": "2026-10-05T07:00:00.000Z"
+            }
+          }
+        },
+        "lastUpdatedDate": "2026-10-05T07:00:00.000Z",
+        "type": "PIECE_TRIGGER",
+        "settings": {
+          "propertySettings": {
+            "to": {
+              "type": "MANUAL"
+            },
+            "auth": {
+              "type": "MANUAL"
+            },
+            "subject": {
+              "type": "MANUAL"
+            }
+          },
+          "pieceName": "@activepieces/piece-gmail",
+          "pieceVersion": "0.8.6",
+          "triggerName": "gmail_new_email_received",
+          "input": {
+            "to": "REPLACE_WITH_INBOX@example.com",
+            "auth": "{{connections['MANUAL_GMAIL']}}",
+            "subject": "quote"
+          }
+        }
+      },
+      "valid": true,
+      "schemaVersion": "23",
+      "notes": []
+    }
+  ],
+  "status": "DRAFT"
+}
